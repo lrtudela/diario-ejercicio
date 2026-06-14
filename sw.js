@@ -1,4 +1,4 @@
-const CACHE = "fitness-v1";
+const CACHE = "fitness-v2";
 const ARCHIVOS = [
   "/diario-ejercicio/",
   "/diario-ejercicio/index.html",
