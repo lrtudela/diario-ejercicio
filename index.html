@@ -126,10 +126,46 @@
   <div class="mensaje" id="peso-mensaje"></div>
 </section>
 
-<!-- PANTALLA: ENTRENAMIENTO (próxima fase) -->
+<!-- PANTALLA: ENTRENAMIENTO -->
 <section class="screen" id="screen-entrenamiento">
   <h2>Registrar sesión</h2>
-  <p style="color:#888">Próximamente</p>
+
+  <label>Fecha</label>
+  <input type="date" id="sesion-fecha">
+
+  <label>Tipo de sesión</label>
+  <select id="sesion-tipo">
+    <option value="fuerza">Fuerza</option>
+    <option value="cardio">Cardio</option>
+    <option value="movilidad">Movilidad</option>
+    <option value="mixto">Mixto</option>
+  </select>
+
+  <label>Notas de la sesión (opcional)</label>
+  <textarea id="sesion-notas" rows="2" placeholder="Sensaciones, RPE general..."></textarea>
+
+  <hr style="border-color:#333; margin: 24px 0;">
+
+  <h2>Añadir ejercicio</h2>
+
+  <label>Ejercicio</label>
+  <input type="text" id="ej-nombre" placeholder="Sentadilla, Press banca...">
+
+  <label>Series</label>
+  <input type="number" id="ej-series" placeholder="4">
+
+  <label>Repeticiones</label>
+  <input type="number" id="ej-reps" placeholder="8">
+
+  <label>Carga (kg)</label>
+  <input type="number" id="ej-carga" step="0.5" placeholder="80">
+
+  <button class="submit" style="background:#1a1a1a; color:#4ade80; border: 1px solid #4ade80; margin-top:16px" onclick="añadirEjercicio()">+ Añadir ejercicio</button>
+
+  <div id="lista-ejercicios" style="margin-top: 20px;"></div>
+
+  <button class="submit" onclick="enviarSesion()">Guardar sesión</button>
+  <div class="mensaje" id="sesion-mensaje"></div>
 </section>
 
 <!-- PANTALLA: PROGRESO (próxima fase) -->
@@ -148,8 +184,12 @@
 <script>
   const API = "https://script.google.com/macros/s/AKfycbz0Z04ZF-cvnLQYmXEisnAHmAlONn9wNplFLw4qtBDasM-nG7eH23vE0uu2dcK31aue/exec";
 
-  // Poner fecha de hoy por defecto
-  document.getElementById("peso-fecha").value = new Date().toISOString().split("T")[0];
+  let ejercicios = [];
+
+  // Fechas de hoy por defecto
+  const hoy = new Date().toISOString().split("T")[0];
+  document.getElementById("peso-fecha").value = hoy;
+  document.getElementById("sesion-fecha").value = hoy;
 
   function mostrarPantalla(nombre, boton) {
     document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
@@ -157,6 +197,8 @@
     document.getElementById("screen-" + nombre).classList.add("active");
     boton.classList.add("active");
   }
+
+  // --- PESO ---
 
   async function enviarPeso() {
     const fecha = document.getElementById("peso-fecha").value;
@@ -184,6 +226,99 @@
       mostrarMensaje(msg, "Error al conectar con la API", "error");
     }
   }
+
+  // --- ENTRENAMIENTO ---
+
+  function añadirEjercicio() {
+    const nombre = document.getElementById("ej-nombre").value.trim();
+    const series = document.getElementById("ej-series").value;
+    const reps = document.getElementById("ej-reps").value;
+    const carga = document.getElementById("ej-carga").value;
+
+    if (!nombre || !series || !reps) {
+      alert("Nombre, series y repeticiones son obligatorios");
+      return;
+    }
+
+    const ej = {
+      nombre,
+      series: parseInt(series),
+      repeticiones: parseInt(reps),
+      carga: parseFloat(carga) || 0
+    };
+
+    ejercicios.push(ej);
+    renderizarEjercicios();
+
+    // Limpiar campos
+    document.getElementById("ej-nombre").value = "";
+    document.getElementById("ej-series").value = "";
+    document.getElementById("ej-reps").value = "";
+    document.getElementById("ej-carga").value = "";
+    document.getElementById("ej-nombre").focus();
+  }
+
+  function eliminarEjercicio(index) {
+    ejercicios.splice(index, 1);
+    renderizarEjercicios();
+  }
+
+  function renderizarEjercicios() {
+    const lista = document.getElementById("lista-ejercicios");
+
+    if (ejercicios.length === 0) {
+      lista.innerHTML = "";
+      return;
+    }
+
+    lista.innerHTML = `
+      <p style="color:#aaa; font-size:0.85rem; margin-bottom:10px">Ejercicios añadidos:</p>
+      ${ejercicios.map((ej, i) => `
+        <div style="background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:600">${ej.nombre}</div>
+            <div style="color:#888; font-size:0.85rem">${ej.series}×${ej.repeticiones} — ${ej.carga}kg</div>
+          </div>
+          <button onclick="eliminarEjercicio(${i})" style="background:none; border:none; color:#f87171; font-size:1.2rem; cursor:pointer">✕</button>
+        </div>
+      `).join("")}
+    `;
+  }
+
+  async function enviarSesion() {
+    const fecha = document.getElementById("sesion-fecha").value;
+    const tipo_sesion = document.getElementById("sesion-tipo").value;
+    const notas = document.getElementById("sesion-notas").value;
+    const msg = document.getElementById("sesion-mensaje");
+
+    if (!fecha) {
+      mostrarMensaje(msg, "La fecha es obligatoria", "error");
+      return;
+    }
+
+    if (ejercicios.length === 0) {
+      mostrarMensaje(msg, "Añade al menos un ejercicio", "error");
+      return;
+    }
+
+    const datos = { tipo: "sesion", fecha, tipo_sesion, notas, ejercicios };
+
+    try {
+      await fetch(API, {
+        method: "POST",
+        body: JSON.stringify(datos),
+        headers: { "Content-Type": "text/plain" }
+      });
+      mostrarMensaje(msg, "✓ Sesión guardada", "ok");
+      ejercicios = [];
+      renderizarEjercicios();
+      document.getElementById("sesion-notas").value = "";
+    } catch (err) {
+      mostrarMensaje(msg, "Error al conectar con la API", "error");
+    }
+  }
+
+  // --- UTILS ---
 
   function mostrarMensaje(el, texto, tipo) {
     el.textContent = texto;
