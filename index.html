@@ -4,9 +4,193 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fitness Diary</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f0f;
+      color: #f0f0f0;
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    header {
+      background: #1a1a1a;
+      padding: 16px 20px;
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-align: center;
+      border-bottom: 1px solid #333;
+    }
+
+    nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #1a1a1a;
+      display: flex;
+      border-top: 1px solid #333;
+    }
+
+    nav button {
+      flex: 1;
+      padding: 14px;
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    nav button.active { color: #4ade80; }
+
+    .screen { display: none; padding: 24px 20px; }
+    .screen.active { display: block; }
+
+    h2 {
+      font-size: 1.1rem;
+      margin-bottom: 20px;
+      color: #4ade80;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 6px;
+      margin-top: 16px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 12px;
+      color: #f0f0f0;
+      font-size: 1rem;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #4ade80;
+    }
+
+    button.submit {
+      margin-top: 24px;
+      width: 100%;
+      background: #4ade80;
+      color: #0f0f0f;
+      border: none;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button.submit:active { background: #22c55e; }
+
+    .mensaje {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .mensaje.ok { background: #14532d; color: #4ade80; display: block; }
+    .mensaje.error { background: #450a0a; color: #f87171; display: block; }
+  </style>
 </head>
 <body>
-  <h1>Fitness Diary</h1>
-  <p>Aquí va tu diario de entrenamiento.</p>
+
+<header>🏋️ Fitness Diary</header>
+
+<!-- PANTALLA: PESO -->
+<section class="screen active" id="screen-peso">
+  <h2>Registrar peso</h2>
+
+  <label>Fecha</label>
+  <input type="date" id="peso-fecha">
+
+  <label>Peso (kg)</label>
+  <input type="number" id="peso-valor" step="0.1" placeholder="75.5">
+
+  <label>Notas (opcional)</label>
+  <textarea id="peso-notas" rows="2" placeholder="En ayunas, después de entrenar..."></textarea>
+
+  <button class="submit" onclick="enviarPeso()">Guardar</button>
+  <div class="mensaje" id="peso-mensaje"></div>
+</section>
+
+<!-- PANTALLA: ENTRENAMIENTO (próxima fase) -->
+<section class="screen" id="screen-entrenamiento">
+  <h2>Registrar sesión</h2>
+  <p style="color:#888">Próximamente</p>
+</section>
+
+<!-- PANTALLA: PROGRESO (próxima fase) -->
+<section class="screen" id="screen-progreso">
+  <h2>Progreso</h2>
+  <p style="color:#888">Próximamente</p>
+</section>
+
+<!-- NAVEGACIÓN -->
+<nav>
+  <button class="active" onclick="mostrarPantalla('peso', this)">⚖️ Peso</button>
+  <button onclick="mostrarPantalla('entrenamiento', this)">💪 Entrena</button>
+  <button onclick="mostrarPantalla('progreso', this)">📈 Progreso</button>
+</nav>
+
+<script>
+  const API = "https://script.google.com/macros/s/AKfycbz0Z04ZF-cvnLQYmXEisnAHmAlONn9wNplFLw4qtBDasM-nG7eH23vE0uu2dcK31aue/exec";
+
+  // Poner fecha de hoy por defecto
+  document.getElementById("peso-fecha").value = new Date().toISOString().split("T")[0];
+
+  function mostrarPantalla(nombre, boton) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    document.getElementById("screen-" + nombre).classList.add("active");
+    boton.classList.add("active");
+  }
+
+  async function enviarPeso() {
+    const fecha = document.getElementById("peso-fecha").value;
+    const peso = document.getElementById("peso-valor").value;
+    const notas = document.getElementById("peso-notas").value;
+    const msg = document.getElementById("peso-mensaje");
+
+    if (!fecha || !peso) {
+      mostrarMensaje(msg, "Fecha y peso son obligatorios", "error");
+      return;
+    }
+
+    const datos = { tipo: "peso", fecha, peso: parseFloat(peso), notas };
+
+    try {
+      await fetch(API, {
+        method: "POST",
+        body: JSON.stringify(datos),
+        headers: { "Content-Type": "text/plain" }
+      });
+      mostrarMensaje(msg, "✓ Peso guardado", "ok");
+      document.getElementById("peso-valor").value = "";
+      document.getElementById("peso-notas").value = "";
+    } catch (err) {
+      mostrarMensaje(msg, "Error al conectar con la API", "error");
+    }
+  }
+
+  function mostrarMensaje(el, texto, tipo) {
+    el.textContent = texto;
+    el.className = "mensaje " + tipo;
+    setTimeout(() => el.className = "mensaje", 3000);
+  }
+</script>
+
 </body>
 </html>
