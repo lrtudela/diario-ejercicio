@@ -104,6 +104,7 @@
     .mensaje.ok { background: #14532d; color: #4ade80; display: block; }
     .mensaje.error { background: #450a0a; color: #f87171; display: block; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -168,10 +169,13 @@
   <div class="mensaje" id="sesion-mensaje"></div>
 </section>
 
-<!-- PANTALLA: PROGRESO (próxima fase) -->
+<!-- PANTALLA: PROGRESO -->
 <section class="screen" id="screen-progreso">
-  <h2>Progreso</h2>
-  <p style="color:#888">Próximamente</p>
+  <h2>Evolución del peso</h2>
+  <canvas id="grafica-peso" style="width:100%; margin-bottom:32px"></canvas>
+
+  <h2>Últimas sesiones</h2>
+  <div id="tabla-sesiones"></div>
 </section>
 
 <!-- NAVEGACIÓN -->
@@ -191,11 +195,125 @@
   document.getElementById("peso-fecha").value = hoy;
   document.getElementById("sesion-fecha").value = hoy;
 
+  let graficaPeso = null;
+
   function mostrarPantalla(nombre, boton) {
     document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
     document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
     document.getElementById("screen-" + nombre).classList.add("active");
     boton.classList.add("active");
+
+    if (nombre === "progreso") cargarProgreso();
+  }
+
+  async function cargarProgreso() {
+    try {
+      // Cargar peso
+      const resPeso = await fetch(API + "?accion=peso");
+      const dataPeso = await resPeso.json();
+      renderizarGraficaPeso(dataPeso.datos);
+
+      // Cargar sesiones
+      const resSesiones = await fetch(API + "?accion=sesiones");
+      const dataSesiones = await resSesiones.json();
+      renderizarTablaSesiones(dataSesiones.datos);
+
+    } catch (err) {
+      console.error("Error cargando progreso:", err);
+    }
+  }
+
+  function renderizarGraficaPeso(datos) {
+    if (!datos || datos.length === 0) {
+      document.getElementById("grafica-peso").style.display = "none";
+      return;
+    }
+
+    // Ordenar por fecha
+    datos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+    const labels = datos.map(d => {
+      const fecha = new Date(d.fecha);
+      return fecha.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+    });
+    const pesos = datos.map(d => parseFloat(d.peso));
+
+    // Destruir gráfica anterior si existe
+    if (graficaPeso) graficaPeso.destroy();
+
+    const ctx = document.getElementById("grafica-peso").getContext("2d");
+    graficaPeso = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          label: "Peso (kg)",
+          data: pesos,
+          borderColor: "#4ade80",
+          backgroundColor: "rgba(74, 222, 128, 0.1)",
+          borderWidth: 2,
+          pointBackgroundColor: "#4ade80",
+          pointRadius: 4,
+          tension: 0.3,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: "#f0f0f0" } }
+        },
+        scales: {
+          x: { ticks: { color: "#888" }, grid: { color: "#222" } },
+          y: {
+            ticks: { color: "#888" },
+            grid: { color: "#222" },
+            suggestedMin: Math.min(...pesos) - 2,
+            suggestedMax: Math.max(...pesos) + 2
+          }
+        }
+      }
+    });
+  }
+
+  function renderizarTablaSesiones(datos) {
+    const contenedor = document.getElementById("tabla-sesiones");
+
+    if (!datos || datos.length === 0) {
+      contenedor.innerHTML = "<p style='color:#888'>Sin sesiones registradas</p>";
+      return;
+    }
+
+    // Agrupar por fecha
+    const porFecha = {};
+    datos.forEach(fila => {
+      const key = fila.fecha + "|" + fila.tipo;
+      if (!porFecha[key]) porFecha[key] = { fecha: fila.fecha, tipo: fila.tipo, ejercicios: [] };
+      porFecha[key].ejercicios.push(fila);
+    });
+
+    const sesiones = Object.values(porFecha)
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+      .slice(0, 10); // últimas 10
+
+    contenedor.innerHTML = sesiones.map(s => {
+      const fecha = new Date(s.fecha).toLocaleDateString("es-ES", {
+        weekday: "short", day: "numeric", month: "short"
+      });
+      return `
+        <div style="background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:14px; margin-bottom:12px">
+          <div style="display:flex; justify-content:space-between; margin-bottom:8px">
+            <span style="font-weight:600">${fecha}</span>
+            <span style="color:#4ade80; font-size:0.85rem; text-transform:uppercase">${s.tipo}</span>
+          </div>
+          ${s.ejercicios.map(ej => `
+            <div style="color:#aaa; font-size:0.85rem; padding: 4px 0; border-top:1px solid #222">
+              ${ej.ejercicio} — ${ej.series}×${ej.repeticiones} a ${ej.carga}kg
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }).join("");
   }
 
   // --- PESO ---
