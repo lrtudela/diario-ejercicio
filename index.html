@@ -176,8 +176,20 @@
   <h2>Evolución del peso</h2>
   <canvas id="grafica-peso" style="width:100%; margin-bottom:32px"></canvas>
 
-  <h2>Últimas sesiones</h2>
-  <div id="tabla-sesiones"></div>
+  <!-- Pestañas de log -->
+  <div style="display:flex; gap:8px; margin-bottom:16px">
+    <button id="tab-sesiones" onclick="mostrarTab('sesiones')"
+      style="flex:1; padding:10px; border-radius:8px; border:1px solid #4ade80; background:#4ade80; color:#0f0f0f; font-weight:700; cursor:pointer">
+      Sesiones
+    </button>
+    <button id="tab-pesos" onclick="mostrarTab('pesos')"
+      style="flex:1; padding:10px; border-radius:8px; border:1px solid #333; background:none; color:#aaa; cursor:pointer">
+      Pesos
+    </button>
+  </div>
+
+  <div id="log-sesiones"></div>
+  <div id="log-pesos" style="display:none"></div>
 </section>
 
 <!-- NAVEGACIÓN -->
@@ -210,12 +222,11 @@
 
   async function cargarProgreso() {
     try {
-      // Cargar peso
       const resPeso = await fetch(API + "?accion=peso");
       const dataPeso = await resPeso.json();
       renderizarGraficaPeso(dataPeso.datos);
+      renderizarLogPesos(dataPeso.datos);
 
-      // Cargar sesiones
       const resSesiones = await fetch(API + "?accion=sesiones");
       const dataSesiones = await resSesiones.json();
       renderizarTablaSesiones(dataSesiones.datos);
@@ -279,14 +290,13 @@
   }
 
   function renderizarTablaSesiones(datos) {
-    const contenedor = document.getElementById("tabla-sesiones");
+    const contenedor = document.getElementById("log-sesiones");
 
     if (!datos || datos.length === 0) {
       contenedor.innerHTML = "<p style='color:#888'>Sin sesiones registradas</p>";
       return;
     }
 
-    // Agrupar por fecha
     const porFecha = {};
     datos.forEach(fila => {
       const key = fila.fecha + "|" + fila.tipo;
@@ -295,13 +305,15 @@
     });
 
     const sesiones = Object.values(porFecha)
-      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
-      .slice(0, 10); // últimas 10
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
     contenedor.innerHTML = sesiones.map(s => {
       const fecha = new Date(s.fecha).toLocaleDateString("es-ES", {
-        weekday: "short", day: "numeric", month: "short"
+        weekday: "short", day: "numeric", month: "short", year: "numeric"
       });
+      const volumen = s.ejercicios.reduce((acc, ej) =>
+        acc + (ej.series * ej.repeticiones * ej.carga), 0
+      );
       return `
         <div style="background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:14px; margin-bottom:12px">
           <div style="display:flex; justify-content:space-between; margin-bottom:8px">
@@ -309,10 +321,15 @@
             <span style="color:#4ade80; font-size:0.85rem; text-transform:uppercase">${s.tipo}</span>
           </div>
           ${s.ejercicios.map(ej => `
-            <div style="color:#aaa; font-size:0.85rem; padding: 4px 0; border-top:1px solid #222">
+            <div style="color:#aaa; font-size:0.85rem; padding:4px 0; border-top:1px solid #222">
               ${ej.ejercicio} — ${ej.series}×${ej.repeticiones} a ${ej.carga}kg
             </div>
           `).join("")}
+          ${volumen > 0 ? `
+            <div style="margin-top:8px; padding-top:8px; border-top:1px solid #222; font-size:0.8rem; color:#666">
+              Volumen total: ${volumen.toLocaleString("es-ES")} kg
+            </div>
+          ` : ""}
         </div>
       `;
     }).join("");
@@ -447,6 +464,46 @@
   }
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/diario-ejercicio/sw.js");
+  }
+  function mostrarTab(tab) {
+    const esSesiones = tab === "sesiones";
+
+    document.getElementById("log-sesiones").style.display = esSesiones ? "block" : "none";
+    document.getElementById("log-pesos").style.display = esSesiones ? "none" : "block";
+
+    document.getElementById("tab-sesiones").style.background = esSesiones ? "#4ade80" : "none";
+    document.getElementById("tab-sesiones").style.color = esSesiones ? "#0f0f0f" : "#aaa";
+    document.getElementById("tab-sesiones").style.borderColor = esSesiones ? "#4ade80" : "#333";
+
+    document.getElementById("tab-pesos").style.background = esSesiones ? "none" : "#4ade80";
+    document.getElementById("tab-pesos").style.color = esSesiones ? "#aaa" : "#0f0f0f";
+    document.getElementById("tab-pesos").style.borderColor = esSesiones ? "#333" : "#4ade80";
+  }
+
+  function renderizarLogPesos(datos) {
+    const contenedor = document.getElementById("log-pesos");
+
+    if (!datos || datos.length === 0) {
+      contenedor.innerHTML = "<p style='color:#888'>Sin registros de peso</p>";
+      return;
+    }
+
+    const ordenados = [...datos].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+    contenedor.innerHTML = ordenados.map(d => {
+      const fecha = new Date(d.fecha).toLocaleDateString("es-ES", {
+        weekday: "short", day: "numeric", month: "short", year: "numeric"
+      });
+      return `
+        <div style="background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center">
+          <div>
+            <div style="font-size:0.85rem; color:#888">${fecha}</div>
+            ${d.notas ? `<div style="font-size:0.8rem; color:#666; margin-top:4px">${d.notas}</div>` : ""}
+          </div>
+          <div style="font-size:1.4rem; font-weight:700; color:#4ade80">${parseFloat(d.peso).toFixed(1)} kg</div>
+        </div>
+      `;
+    }).join("");
   }
 </script>
 
